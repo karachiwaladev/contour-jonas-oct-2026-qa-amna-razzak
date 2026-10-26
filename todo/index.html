@@ -45,6 +45,11 @@
     .edit-fields .row input[type=text] { flex: 1; min-width: 140px; }
     .edit-fields input { padding: 6px 10px; }
     #clear-tags { font-size: 14px; padding: 4px 6px; }
+    select, input[type=number] { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+    .repeat-slot { display: flex; gap: 8px; }
+    input.interval { width: 84px; }
+    .edit-fields select, .edit-fields input[type=number] { padding: 6px 10px; }
+    .repeat { padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text); }
     .empty, .count { color: var(--muted); padding: 12px; text-align: center; }
     .count { padding: 8px 0 0; font-size: 14px; }
   </style>
@@ -58,6 +63,7 @@
       <div class="row">
         <input id="new-due" type="date" aria-label="Due date (optional)">
         <input id="new-tags" type="text" placeholder="Tags, comma separated (optional)" autocomplete="off" aria-label="Tags">
+        <span id="new-repeat-slot" class="repeat-slot"></span>
       </div>
     </form>
     <div class="filters" id="filters">
