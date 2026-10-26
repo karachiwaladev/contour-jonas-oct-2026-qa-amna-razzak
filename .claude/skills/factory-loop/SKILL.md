@@ -112,6 +112,8 @@ If the user is talking to you directly in the session (a typed prompt, not a sch
 
 **Stage 4. Test, then verify in the browser with Chrome DevTools.** Write and run the automated tests first (work-request steps 4–6), then check by hand with the `chrome-devtools` MCP tools. Serve the project locally (for example a tiny Node static server in the background), `new_page`/`navigate_page` to it, then walk through every requirement in the ticket: fill forms, click, reload to check persistence, and check `list_console_messages` for errors. Fix anything that fails and re-verify before committing.
 
+If the `chrome-devtools` tools aren't available, don't claim a walkthrough that didn't happen and don't add placeholder screenshots: a reviewer trusts every ✔ in the PR. Still run all the automated tests (Playwright drives its own browser), write **Verified in Chrome: not done** with the reason, list the manual steps for the reviewer, and say the same in the `factory-loop:pr` comment.
+
 **Stage 5. Screenshots.** Capture the key states (`take_screenshot` with a `filePath`): at least the main view, plus one per new feature or state that the ticket mentions. Save them in the project as `<project>/screenshots/issue-<N>/<nn>-<what>.png` and commit them with the work. GitHub's API can't upload attachments to comments, so embed them by URL after the push, in both the PR body and the done comment:
 `![<what>](https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true)`
 
@@ -156,7 +158,7 @@ Every work request ships as **one branch and one PR per ticket**, and **a person
    gh pr create --base main --head ticket-<N>-<slug> --title "Ticket #N: <title>" --body-file "$SCRATCH/pr-<N>.md"
    ```
    with `Closes #<issue>` in the body.
-10. **Wait for CI, then request review and stop.** Run `gh pr checks <pr> --watch`. If CI fails, fix it on the branch and push again; never ask for review on a red PR. Once it is green, post a comment on the ticket that starts with `<!-- factory-loop:pr -->`, linking the PR, summarizing it and saying: "Ready for review. Approve the PR (or reply `approved` on it) and I'll merge it and close this ticket." Leave both the PR and the ticket open, and go back to `main`: `git checkout main && git pull --ff-only`.
+10. **Wait for CI, then request review and stop.** Run `gh pr checks <pr> --watch`. If CI fails, fix it on the branch and push again; never ask for review on a red PR. Then self-check the evidence: `node .claude/skills/factory-loop/evals/check-verification.js <pr>` (read-only). Fix any failing check (a missing test, screenshot or PR-body section) and push again. A check may stay failing only when it honestly can't pass, such as no browser tool, and the PR says why. Once CI is green and the self-check passes, post a comment on the ticket that starts with `<!-- factory-loop:pr -->`, linking the PR, summarizing it and saying: "Ready for review. Approve the PR (or reply `approved` on it) and I'll merge it and close this ticket." Leave both the PR and the ticket open, and go back to `main`: `git checkout main && git pull --ff-only`.
 
 #### Waiting for PR approval (later ticks)
 
