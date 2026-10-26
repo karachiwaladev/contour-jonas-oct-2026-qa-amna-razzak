@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop hook: commit any leftover changes and push the current branch (main or a ticket-* branch),
+# Stop hook: commit any leftover changes and push the current ticket-* branch,
 # so finished work always reaches GitHub. It never merges: PRs are opened and merged by the factory loop.
 # Non-destructive by design: no force-push, no reset of the working tree, no deletes.
 # Prints a {"systemMessage": ...} line only when something happened or the push status changed.
@@ -9,16 +9,18 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 say() { node -e 'process.stdout.write(JSON.stringify({systemMessage: process.argv[1]}))' "$1"; }
 
-# Only act on main or a ticket branch, and never in the middle of a merge, rebase or cherry-pick.
+# Only act on ticket branches, never on main: everything reaches main through a reviewed PR.
+# Also never in the middle of a merge, rebase or cherry-pick.
 branch=$(git symbolic-ref --short -q HEAD)
-case "$branch" in main|ticket-*) ;; *) exit 0 ;; esac
+case "$branch" in ticket-*) ;; *) exit 0 ;; esac
 gitdir=$(git rev-parse --git-dir)
 for f in MERGE_HEAD rebase-merge rebase-apply CHERRY_PICK_HEAD REVERT_HEAD; do
   [ -e "$gitdir/$f" ] && exit 0
 done
 
 msg=""
-git add -A
+# Keep the session prompt log out of ticket PRs.
+git add -A -- . ':(exclude).claude/logs'
 if ! git diff --cached --quiet; then
   # Refuse to commit anything that looks like a secret; unstage only (files stay on disk).
   secrets=$(git diff --cached --name-only | grep -Ei '(^|/)(\.env(\..*)?|id_rsa.*|id_ed25519.*|.*\.pem|.*\.key|.*\.p12|hosts\.yml|credentials.*|.*secret.*)$')
