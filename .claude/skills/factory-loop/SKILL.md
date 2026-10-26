@@ -1,6 +1,6 @@
 ---
 name: factory-loop
-description: Work through the GitHub issue queue of the current repo like a ticket factory. Fetch open issues, react with 🫣 to claim each one, read what it asks, and actually do it — create the files, folders or whole projects the ticket asks for, commit and push them to main (or answer in a comment when it is only a question) — then close it as completed. Never takes destructive actions. Use this whenever the user says "check the tickets", "process the issues", "run the factory loop", "pick up new tickets", "work the queue", or asks to answer, handle or close GitHub issues/tickets in this repo, including inside a recurring /loop. Also use it when a new "Ticket #N" issue is mentioned.
+description: Work through the GitHub issue queue of the current repo like a ticket factory. Fetch open issues, react with 🫣 to claim each one, read what it asks, and actually do it — create the files, folders or whole projects the ticket asks for on a ticket branch, open a PR and merge it into main (or answer in a comment when it is only a question) — then close it as completed. Never takes destructive actions. Use this whenever the user says "check the tickets", "process the issues", "run the factory loop", "pick up new tickets", "work the queue", or asks to answer, handle or close GitHub issues/tickets in this repo, including inside a recurring /loop. Also use it when a new "Ticket #N" issue is mentioned.
 ---
 
 # factory-loop
@@ -71,7 +71,7 @@ Then classify it:
 | Ticket type | Looks like | What "done" means |
 |---|---|---|
 | **Question** | "What is…", "Create a ticket asking about…", "Which city…" | An accurate answer posted as a comment |
-| **Work request** | "Add a file…", "Build me an app…", "Create a test plan…", "Fix…", "Enhance…", "Write…" | The files/project exist in the repo, committed and pushed to `main`, with a comment linking the commit |
+| **Work request** | "Add a file…", "Build me an app…", "Create a test plan…", "Fix…", "Enhance…", "Write…" | The files/project are on `main` via a merged PR for the ticket, with a comment linking the PR |
 | **Unclear** | Ambiguous, missing info, or depends on something not available | A comment asking a specific clarifying question. Leave the ticket **open** |
 
 Some tickets are worded as meta-requests ("Create the ticket asking a question about X?"). The real deliverable is still the answer to X: answer it.
@@ -103,27 +103,37 @@ If the user is talking to you directly in the session (a typed prompt, not a sch
 
 **Stage 4. Verify in the browser with Chrome DevTools** (the `chrome-devtools` MCP tools). Serve the project locally (for example a tiny Node static server in the background), `new_page`/`navigate_page` to it, then walk through every requirement in the ticket: fill forms, click, reload to check persistence, and check `list_console_messages` for errors. Fix anything that fails and re-verify before committing.
 
-**Stage 5. Screenshots.** Capture the key states (`take_screenshot` with a `filePath`): at least the main view, plus one per new feature or state that the ticket mentions. Save them in the project as `<project>/screenshots/issue-<N>/<nn>-<what>.png` and commit them with the work. GitHub's API can't upload attachments to comments, so embed them by URL after the push:
+**Stage 5. Screenshots.** Capture the key states (`take_screenshot` with a `filePath`): at least the main view, plus one per new feature or state that the ticket mentions. Save them in the project as `<project>/screenshots/issue-<N>/<nn>-<what>.png` and commit them with the work. GitHub's API can't upload attachments to comments, so embed them by URL after the push, in both the PR body and the done comment:
 `![<what>](https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true)`
 
-**Stage 6. Report and close.** The done comment links the commit, lists what changed, embeds the screenshots and says what was verified. Then close as completed.
+**Stage 6. PR, merge, report.** Open the PR, merge it (see the work-request steps below), then post the done comment linking the PR, listing what changed, embedding the screenshots and saying what was verified.
 
 Small, non-UI work requests (add a doc, a config file, a one-line fix) skip stages 1–2 and 4–5: just do them.
 
 ### Work requests
-1. Make sure you're on `main` and up to date: `git checkout main && git pull --ff-only`.
+
+Every work request ships as **one branch and one PR per ticket**, merged into `main` straight away. The PR is the reviewable record of the ticket; merging keeps `main` complete, which is what the reviewers score.
+
+1. Start from an up-to-date `main` and branch off it: `git checkout main && git pull --ff-only && git checkout -b ticket-<N>-<short-slug>` (N = the ticket number in the title, for example `ticket-5-calendar-view`).
 2. Read `CLAUDE.md` for the repo's conventions. A new project goes in **its own top-level folder** with a `README.md`; add it to the `CLAUDE.md` index in the same commit.
 3. Build it: everything the ticket asks for, working end to end, but nothing it didn't ask for. Prefer no-build, dependency-free solutions unless the ticket says otherwise.
 4. Check it actually works: run tests or linters if there are any; anything with a UI gets verified in Chrome DevTools with screenshots (stages 4–5 above). Fix what you find before committing.
-5. Commit only the files for this ticket (`git add <paths>`, not `git add -A`), with a message that references the ticket, ending with the commit attribution lines from your system reminder (if any). Use the **issue** number in `Closes`, which can differ from the ticket number in the title:
+5. Commit only the files for this ticket (`git add <paths>`, not `git add -A`) on the ticket branch, with a message that references the ticket, ending with the commit attribution lines from your system reminder (if any):
    ```
    Ticket #N: <what changed>
-
-   Closes #<issue>
    ```
-6. `git push origin main`. If it's rejected as non-fast-forward, `git pull --rebase` and push again. Never force-push.
+6. Push the branch: `git push -u origin ticket-<N>-<slug>`.
+7. Open the PR against `main`. Write the body to a file. Use the **issue** number in `Closes`, which can differ from the ticket number in the title. The body has a summary, what changed, what was verified, the screenshots, and the PR attribution line from your system reminder (if any):
+   ```bash
+   gh pr create --base main --head ticket-<N>-<slug> --title "Ticket #N: <title>" --body-file "$SCRATCH/pr-<N>.md"
+   ```
+   with `Closes #<issue>` in the body.
+8. Merge it with a merge commit, keeping the branch: `gh pr merge <pr> --merge`. Don't squash, so the commit SHAs in the screenshot links stay valid, and don't pass `--delete-branch`, because deleting branches is off-limits. Merging closes the issue through `Closes #<issue>`.
+9. Go back to `main`: `git checkout main && git pull --ff-only`.
 
-**If the push fails for any other reason** (auth, suspended account, network): keep the commit, don't comment, don't close. Leave the ticket open with its reaction and tell the user. On every later tick, first retry `git push origin main`; once it succeeds, post the comments and close the tickets whose commits just landed. The Stop hook (below) also retries the push.
+If the merge is blocked (failing checks, conflicts, branch protection), leave the PR open, comment the reason on the ticket, and tell the user. Don't force it. Resolve conflicts by merging `main` into the branch (`git merge main`), not by rebasing a pushed branch.
+
+**If the push fails** (auth, suspended account, network): keep the commit, don't open the PR, comment or close. Leave the ticket open with its reaction and tell the user. On every later tick, first retry the push; once it succeeds, carry on from step 7. The Stop hook (below) also retries the push.
 
 ## 5. Report back in a comment
 
@@ -145,7 +155,7 @@ _Source: <source>._
 
 **Work-request template:**
 ```markdown
-Done in <commit-sha-short> (<link to commit>).
+Done in PR #<pr> (<link to PR>), merged into `main` as <merge-sha-short>.
 
 **What changed**
 - <file>: <what and why>
@@ -165,7 +175,7 @@ Keep it short and factual. A reviewer should understand what was delivered witho
 
 ## 6. Close it
 
-Close only when the deliverable is visible on GitHub (comment posted, and commit pushed for work requests):
+Close only when the deliverable is visible on GitHub: the comment is posted, and for work requests the PR is merged. Merging normally closes the issue already; check, and close it yourself if it didn't:
 
 ```bash
 gh issue close "$N" --repo "$REPO" --reason completed
@@ -179,7 +189,7 @@ GitHub's close reasons are only `completed` and `not planned`. "Answered" means 
 After the queue is processed, give the user one short block per ticket:
 
 ```
-#N  <title>  →  <answered | plan posted, awaiting approval | done in abc1234 | needs clarification | refused | push blocked>  ·  <comment URL>
+#N  <title>  →  <answered | plan posted, awaiting approval | done in PR #12 (merged) | PR #12 open, merge blocked | needs clarification | refused | push blocked>  ·  <comment URL>
 ```
 
 ## Dry-run mode
@@ -198,4 +208,4 @@ On each tick, run the full process. Keep quiet ticks quiet: if nothing new is op
 
 ## Auto commit and push on every stop
 
-`.claude/hooks/auto-commit-push.sh` runs as a Stop hook (see `.claude/settings.json`). Whenever Claude finishes a turn it commits any leftover changes in the repo and pushes `main`. It's a safety net so finished work always reaches GitHub; it never force-pushes, never deletes, and skips the commit if anything that looks like a secret is staged. Still make your own per-ticket commits with proper messages: the hook only picks up what's left over.
+`.claude/hooks/auto-commit-push.sh` runs as a Stop hook (see `.claude/settings.json`). Whenever Claude finishes a turn it commits any leftover changes and pushes the current branch, if that branch is `main` or a `ticket-*` branch. It never merges; merging is the loop's job. It's a safety net so finished work always reaches GitHub; it never force-pushes, never deletes, and skips the commit if anything that looks like a secret is staged. Still make your own per-ticket commits with proper messages: the hook only picks up what's left over.
