@@ -28,11 +28,26 @@ npx serve todo      # or: python -m http.server -d todo
 ## Files
 | File | Purpose |
 |---|---|
-| `index.html` | Page markup and styles (light and dark) |
-| `app.js` | IndexedDB access (`todo-app` database, `tasks` store), filtering and rendering |
+| `index.html` | Page markup and strict Content-Security-Policy |
+| `style.css` | Styles (light and dark) |
+| `lib.js` | Pure logic: dates, repeat rules, tags, filtering (unit-tested) |
+| `app.js` | IndexedDB access (`todo-app` database, `tasks` store) and rendering |
+| `tests/unit/` | Unit tests for `lib.js` (`node:test`) |
+| `tests/e2e/` | Playwright end-to-end tests for every feature, plus security checks |
 
 Task records: `{ id, title, done, createdAt, due: "YYYY-MM-DD" | null, tags: string[], repeat: { every: "day"|"week"|"month", interval, day? } | null, nextCreated? }`.
 Tasks saved by earlier versions (no due date, tags or repeat rule) still load.
+
+## Tests
+From the repo root, after `npm install`:
+
+```bash
+npm test            # unit + end-to-end
+npm run test:unit   # lib.js logic only (fast, no browser)
+npm run test:e2e    # Playwright in Chrome (CI uses Chromium)
+npm run security    # secrets, unsafe DOM sinks, CSP
+```
+CI runs all of these on every pull request, and `main` only accepts PRs that pass.
 
 ## Manual test checklist
 1. Add "Buy milk". It appears and the counter shows `1 of 1 left`.
