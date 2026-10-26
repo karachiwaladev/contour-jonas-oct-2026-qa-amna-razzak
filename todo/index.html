@@ -34,7 +34,17 @@
     .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--muted); }
     .due.overdue { color: var(--danger); font-weight: 600; }
     .tag { padding: 0 8px; border-radius: 999px; background: var(--chip); color: var(--chip-text); }
-    li button { background: transparent; color: var(--danger); padding: 4px 8px; }
+    li .actions { display: flex; gap: 2px; align-items: center; }
+    li button { background: transparent; padding: 4px 8px; }
+    li button.delete { color: var(--danger); }
+    li button.edit, button.link { background: transparent; color: var(--accent); padding: 4px 8px; }
+    li button.save { background: var(--accent); color: #fff; }
+    li.editing { align-items: center; }
+    .edit-fields { flex: 1; display: grid; gap: 6px; min-width: 0; }
+    .edit-fields .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .edit-fields .row input[type=text] { flex: 1; min-width: 140px; }
+    .edit-fields input { padding: 6px 10px; }
+    #clear-tags { font-size: 14px; padding: 4px 6px; }
     .empty, .count { color: var(--muted); padding: 12px; text-align: center; }
     .count { padding: 8px 0 0; font-size: 14px; }
   </style>

@@ -2,6 +2,7 @@
 // Task shape: { id, title, done, createdAt, due: "YYYY-MM-DD" | null, tags: string[] }
 const DB_NAME = "todo-app";
 const STORE = "tasks";
+const FILTER_KEY = "todo-app:filters";
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -42,6 +43,31 @@ function formatDue(due) {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Filters are remembered per browser; storage can be unavailable (private mode), so fall back quietly.
+function loadFilter() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_KEY) || "{}");
+    return {
+      status: ["all", "active", "done"].includes(saved.status) ? saved.status : "all",
+      tags: new Set(Array.isArray(saved.tags) ? saved.tags : []),
+    };
+  } catch {
+    return { status: "all", tags: new Set() };
+  }
+}
+
+function saveFilter(filter) {
+  try {
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ status: filter.status, tags: [...filter.tags] }));
+  } catch {}
+}
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+
 async function main() {
   const tasks = api(await openDb());
   const list = document.getElementById("list");
@@ -53,100 +79,149 @@ async function main() {
   const tagFilters = document.getElementById("tag-filters");
   const tagSep = document.getElementById("tag-sep");
 
-  const filter = { status: "all", tag: null };
+  const filter = loadFilter();
+  let editingId = null;
 
-  document.querySelectorAll("[data-status]").forEach((btn) =>
+  const statusButtons = document.querySelectorAll("[data-status]");
+  const syncStatusButtons = () =>
+    statusButtons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.status === filter.status));
+  statusButtons.forEach((btn) =>
     btn.addEventListener("click", () => {
       filter.status = btn.dataset.status;
-      document.querySelectorAll("[data-status]").forEach((b) => b.setAttribute("aria-pressed", b === btn));
+      saveFilter(filter);
       render();
     })
   );
 
   function renderTagFilters(allTags) {
-    if (filter.tag && !allTags.includes(filter.tag)) filter.tag = null;
+    // Drop selected tags that no task uses any more, from the screen and from the saved filter.
+    const stale = [...filter.tags].filter((tag) => !allTags.includes(tag));
+    if (stale.length) {
+      stale.forEach((tag) => filter.tags.delete(tag));
+      saveFilter(filter);
+    }
     tagFilters.replaceChildren();
     tagSep.hidden = !allTags.length;
     for (const tag of allTags) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill";
+      const btn = el("button", { type: "button", className: "pill", textContent: `#${tag}` });
       btn.dataset.tag = tag;
-      btn.textContent = `#${tag}`;
-      btn.setAttribute("aria-pressed", filter.tag === tag);
+      btn.setAttribute("aria-pressed", filter.tags.has(tag));
       btn.addEventListener("click", () => {
-        filter.tag = filter.tag === tag ? null : tag;
+        filter.tags.has(tag) ? filter.tags.delete(tag) : filter.tags.add(tag);
+        saveFilter(filter);
         render();
       });
       tagFilters.append(btn, " ");
     }
+    if (filter.tags.size) {
+      const clear = el("button", { type: "button", className: "link", id: "clear-tags", textContent: "Clear tags" });
+      clear.addEventListener("click", () => {
+        filter.tags.clear();
+        saveFilter(filter);
+        render();
+      });
+      tagFilters.append(clear);
+    }
+  }
+
+  function renderEditRow(task) {
+    const li = el("li", { className: "editing" });
+    const titleField = el("input", { type: "text", name: "edit-title", value: task.title, required: true });
+    titleField.setAttribute("aria-label", "Task title");
+    const dueField = el("input", { type: "date", name: "edit-due", value: task.due || "" });
+    dueField.setAttribute("aria-label", "Due date");
+    const tagsField = el("input", { type: "text", name: "edit-tags", value: task.tags.join(", "), placeholder: "Tags, comma separated" });
+    tagsField.setAttribute("aria-label", "Tags");
+
+    const save = async () => {
+      const title = titleField.value.trim();
+      if (!title) return titleField.focus();
+      editingId = null;
+      await tasks.update({ ...task, title, due: dueField.value || null, tags: parseTags(tagsField.value) });
+      render();
+    };
+    const cancel = () => {
+      editingId = null;
+      render();
+    };
+
+    const saveBtn = el("button", { type: "button", className: "save", textContent: "Save" });
+    saveBtn.addEventListener("click", save);
+    const cancelBtn = el("button", { type: "button", className: "link", textContent: "Cancel" });
+    cancelBtn.addEventListener("click", cancel);
+
+    li.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); save(); }
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    });
+
+    li.append(
+      el("div", { className: "edit-fields" }, titleField, el("div", { className: "row" }, dueField, tagsField)),
+      el("div", { className: "actions" }, saveBtn, cancelBtn)
+    );
+    requestAnimationFrame(() => titleField.focus());
+    return li;
   }
 
   function renderTask(task) {
-    const li = document.createElement("li");
-    li.className = task.done ? "done" : "";
+    if (task.id === editingId) return renderEditRow(task);
 
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.checked = task.done;
+    const li = el("li", { className: task.done ? "done" : "" });
+
+    const box = el("input", { type: "checkbox", name: `done-${task.id}`, checked: task.done });
     box.setAttribute("aria-label", `Mark "${task.title}" done`);
     box.addEventListener("change", async () => {
       await tasks.update({ ...task, done: box.checked });
       render();
     });
 
-    const body = document.createElement("div");
-    body.className = "body";
-    const title = document.createElement("div");
-    title.className = "title";
-    title.textContent = task.title;
-    body.append(title);
-
+    const body = el("div", { className: "body" }, el("div", { className: "title", textContent: task.title }));
     if (task.due || task.tags.length) {
-      const meta = document.createElement("div");
-      meta.className = "meta";
+      const meta = el("div", { className: "meta" });
       if (task.due) {
-        const due = document.createElement("span");
         const overdue = !task.done && task.due < today();
-        due.className = "due" + (overdue ? " overdue" : "");
-        due.textContent = `Due ${formatDue(task.due)}${overdue ? " (overdue)" : ""}`;
-        meta.append(due);
+        meta.append(el("span", {
+          className: "due" + (overdue ? " overdue" : ""),
+          textContent: `Due ${formatDue(task.due)}${overdue ? " (overdue)" : ""}`,
+        }));
       }
-      for (const tag of task.tags) {
-        const chip = document.createElement("span");
-        chip.className = "tag";
-        chip.textContent = `#${tag}`;
-        meta.append(chip);
-      }
+      for (const tag of task.tags) meta.append(el("span", { className: "tag", textContent: `#${tag}` }));
       body.append(meta);
     }
 
-    const del = document.createElement("button");
-    del.type = "button";
-    del.textContent = "Delete";
+    const edit = el("button", { type: "button", className: "edit", textContent: "Edit" });
+    edit.setAttribute("aria-label", `Edit "${task.title}"`);
+    edit.addEventListener("click", () => {
+      editingId = task.id;
+      render();
+    });
+
+    const del = el("button", { type: "button", className: "delete", textContent: "Delete" });
     del.setAttribute("aria-label", `Delete "${task.title}"`);
     del.addEventListener("click", async () => {
       await tasks.remove(task.id);
       render();
     });
 
-    li.append(box, body, del);
+    li.append(box, body, el("div", { className: "actions" }, edit, del));
     return li;
   }
 
   async function render() {
     const items = (await tasks.all()).map(normalize);
+    syncStatusButtons();
     renderTagFilters([...new Set(items.flatMap((t) => t.tags))].sort());
 
     const shown = items
       .filter((t) => filter.status === "all" || (filter.status === "done") === t.done)
-      .filter((t) => !filter.tag || t.tags.includes(filter.tag))
+      // Several selected tags: a task matches if it has any of them.
+      .filter((t) => !filter.tags.size || t.tags.some((tag) => filter.tags.has(tag)))
       // Soonest due first; tasks without a due date keep their creation order at the end.
       .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || a.createdAt - b.createdAt);
 
     list.replaceChildren(...shown.map(renderTask));
     if (!shown.length) {
-      list.innerHTML = `<li class="empty">${items.length ? "No tasks match this filter." : "No tasks yet. Add one above."}</li>`;
+      list.innerHTML = `<li class="empty">${items.length ? "No tasks match these filters." : "No tasks yet. Add one above."}</li>`;
     }
     const open = items.filter((t) => !t.done).length;
     count.textContent = items.length ? `${open} of ${items.length} left · showing ${shown.length}` : "";
