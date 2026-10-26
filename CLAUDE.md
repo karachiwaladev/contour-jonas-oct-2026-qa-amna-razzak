@@ -57,7 +57,7 @@ update this index in the same commit.**
 |---|---|---|---|
 | Factory loop skill | `.claude/skills/factory-loop/` | Picks up issues, does the work, comments and closes | — |
 | Factory index | `CLAUDE.md` | This file: overview, conventions and project index | #3 (Ticket #2) |
-| Todo app | `todo/` | Create, complete and delete tasks; stored in IndexedDB | #4 (Ticket #3) |
+| Todo app | `todo/` | Tasks with due dates and tags; status/tag filters; IndexedDB | #4, #5 (Tickets #3, #4) |
 
 <!-- Add new projects above this line: | Name | `folder/` | one-line purpose | #issue | -->
 
