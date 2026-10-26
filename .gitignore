@@ -1,5 +1,13 @@
-# Internal bookkeeping for the prompt-log hook (prompts.jsonl itself is tracked)
+# Internal bookkeeping for the prompt-log hook
 .claude/logs/.prompt-log-state.json
 
 # Browser-automation scratch output
 .playwright-mcp/
+
+# Session prompt log stays local (it used to be published; see SECURITY.md)
+.claude/logs/
+
+# Node and test output
+node_modules/
+test-results/
+playwright-report/

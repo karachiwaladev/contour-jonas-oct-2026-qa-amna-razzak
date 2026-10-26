@@ -1,0 +1,14 @@
+{
+  "name": "contour-factory",
+  "private": true,
+  "description": "Software factory training repo: todo app plus factory-loop tooling",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test \"todo/tests/unit/*.test.js\"",
+    "test:e2e": "playwright test",
+    "security": "node scripts/security-check.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

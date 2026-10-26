@@ -3,56 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Todo</title>
-  <style>
-    :root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7280; --accent: #2563eb; --danger: #dc2626; --line: #e5e7eb; --chip: #eef2ff; --chip-text: #3730a3; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg: #111318; --card: #1b1e25; --text: #e6e8ec; --muted: #9aa1ad; --accent: #60a5fa; --danger: #f87171; --line: #2a2e37; --chip: #262b45; --chip-text: #c7d2fe; }
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
-    main { max-width: 620px; margin: 48px auto; padding: 0 16px; }
-    h1 { margin: 0 0 16px; font-size: 28px; }
-    form { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 16px; }
-    form .row { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
-    input[type=text], input[type=date] { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
-    #new-task { min-width: 0; }
-    #new-tags { flex: 1; min-width: 160px; }
-    button { padding: 10px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
-    .filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
-    .filters .label { color: var(--muted); font-size: 14px; margin-right: 2px; }
-    .filters .sep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; }
-    .pill { padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--text); font-size: 14px; }
-    .pill[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #fff; }
-    ul { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
-    li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
-    li:first-child { border-top: 0; }
-    li input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent); }
-    .body { flex: 1; min-width: 0; }
-    .title { word-break: break-word; }
-    li.done .title { text-decoration: line-through; color: var(--muted); }
-    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--muted); }
-    .due.overdue { color: var(--danger); font-weight: 600; }
-    .tag { padding: 0 8px; border-radius: 999px; background: var(--chip); color: var(--chip-text); }
-    li .actions { display: flex; gap: 2px; align-items: center; }
-    li button { background: transparent; padding: 4px 8px; }
-    li button.delete { color: var(--danger); }
-    li button.edit, button.link { background: transparent; color: var(--accent); padding: 4px 8px; }
-    li button.save { background: var(--accent); color: #fff; }
-    li.editing { align-items: center; }
-    .edit-fields { flex: 1; display: grid; gap: 6px; min-width: 0; }
-    .edit-fields .row { display: flex; gap: 6px; flex-wrap: wrap; }
-    .edit-fields .row input[type=text] { flex: 1; min-width: 140px; }
-    .edit-fields input { padding: 6px 10px; }
-    #clear-tags { font-size: 14px; padding: 4px 6px; }
-    select, input[type=number] { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
-    .repeat-slot { display: flex; gap: 8px; }
-    input.interval { width: 84px; }
-    .edit-fields select, .edit-fields input[type=number] { padding: 6px 10px; }
-    .repeat { padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text); }
-    .empty, .count { color: var(--muted); padding: 12px; text-align: center; }
-    .count { padding: 8px 0 0; font-size: 14px; }
-  </style>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
@@ -77,6 +31,7 @@
     <ul id="list" aria-live="polite"></ul>
     <p class="count" id="count"></p>
   </main>
+  <script src="lib.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
