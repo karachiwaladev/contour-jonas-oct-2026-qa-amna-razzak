@@ -1,0 +1,5 @@
+# Internal bookkeeping for the prompt-log hook (prompts.jsonl itself is tracked)
+.claude/logs/.prompt-log-state.json
+
+# Browser-automation scratch output
+.playwright-mcp/
