@@ -1,6 +1,6 @@
 ---
 name: factory-loop
-description: Work through the GitHub issue queue of the current repo like a ticket factory. Fetch open issues, react with 🫣 to claim each one, read what it asks, and actually do it — create the files, folders or whole projects the ticket asks for on a ticket branch, open a PR and merge it into main (or answer in a comment when it is only a question) — then close it as completed. Never takes destructive actions. Use this whenever the user says "check the tickets", "process the issues", "run the factory loop", "pick up new tickets", "work the queue", or asks to answer, handle or close GitHub issues/tickets in this repo, including inside a recurring /loop. Also use it when a new "Ticket #N" issue is mentioned.
+description: Work through the GitHub issue queue of the current repo like a ticket factory. Fetch open issues, react with 🫣 to claim each one, read what it asks, and actually do it — create the files, folders or whole projects the ticket asks for on a ticket branch and open a PR, which waits for manual review and approval before it is merged into main and the ticket is closed (or answer in a comment when it is only a question). Never takes destructive actions. Use this whenever the user says "check the tickets", "process the issues", "run the factory loop", "pick up new tickets", "work the queue", or asks to answer, handle or close GitHub issues/tickets in this repo, including inside a recurring /loop. Also use it when a new "Ticket #N" issue is mentioned.
 ---
 
 # factory-loop
@@ -71,7 +71,7 @@ Then classify it:
 | Ticket type | Looks like | What "done" means |
 |---|---|---|
 | **Question** | "What is…", "Create a ticket asking about…", "Which city…" | An accurate answer posted as a comment |
-| **Work request** | "Add a file…", "Build me an app…", "Create a test plan…", "Fix…", "Enhance…", "Write…" | The files/project are on `main` via a merged PR for the ticket, with a comment linking the PR |
+| **Work request** | "Add a file…", "Build me an app…", "Create a test plan…", "Fix…", "Enhance…", "Write…" | A PR for the ticket was reviewed and approved by a person, then merged into `main`, with a comment linking the PR |
 | **Unclear** | Ambiguous, missing info, or depends on something not available | A comment asking a specific clarifying question. Leave the ticket **open** |
 
 Some tickets are worded as meta-requests ("Create the ticket asking a question about X?"). The real deliverable is still the answer to X: answer it.
@@ -106,13 +106,15 @@ If the user is talking to you directly in the session (a typed prompt, not a sch
 **Stage 5. Screenshots.** Capture the key states (`take_screenshot` with a `filePath`): at least the main view, plus one per new feature or state that the ticket mentions. Save them in the project as `<project>/screenshots/issue-<N>/<nn>-<what>.png` and commit them with the work. GitHub's API can't upload attachments to comments, so embed them by URL after the push, in both the PR body and the done comment:
 `![<what>](https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true)`
 
-**Stage 6. PR, merge, report.** Open the PR, merge it (see the work-request steps below), then post the done comment linking the PR, listing what changed, embedding the screenshots and saying what was verified.
+**Stage 6. PR and review.** Open the PR and hand it over for review (see the work-request steps below). The ticket stays open.
+
+**Stage 7. After approval: merge, report and close.** Once a person approves the PR, merge it, post the done comment (linking the PR, listing what changed, embedding the screenshots, saying what was verified) and make sure the ticket is closed.
 
 Small, non-UI work requests (add a doc, a config file, a one-line fix) skip stages 1–2 and 4–5: just do them.
 
 ### Work requests
 
-Every work request ships as **one branch and one PR per ticket**, merged into `main` straight away. The PR is the reviewable record of the ticket; merging keeps `main` complete, which is what the reviewers score.
+Every work request ships as **one branch and one PR per ticket**, and **a person reviews and approves the PR before it is merged and the ticket is closed**. Never merge your own PR without that approval, even when the work looks finished.
 
 1. Start from an up-to-date `main` and branch off it: `git checkout main && git pull --ff-only && git checkout -b ticket-<N>-<short-slug>` (N = the ticket number in the title, for example `ticket-5-calendar-view`).
 2. Read `CLAUDE.md` for the repo's conventions. A new project goes in **its own top-level folder** with a `README.md`; add it to the `CLAUDE.md` index in the same commit.
@@ -128,10 +130,25 @@ Every work request ships as **one branch and one PR per ticket**, merged into `m
    gh pr create --base main --head ticket-<N>-<slug> --title "Ticket #N: <title>" --body-file "$SCRATCH/pr-<N>.md"
    ```
    with `Closes #<issue>` in the body.
-8. Merge it with a merge commit, keeping the branch: `gh pr merge <pr> --merge`. Don't squash, so the commit SHAs in the screenshot links stay valid, and don't pass `--delete-branch`, because deleting branches is off-limits. Merging closes the issue through `Closes #<issue>`.
-9. Go back to `main`: `git checkout main && git pull --ff-only`.
+8. **Request review and stop.** Post a comment on the ticket that starts with `<!-- factory-loop:pr -->`, linking the PR, summarizing it and saying: "Ready for review. Approve the PR (or reply `approved` on it) and I'll merge it and close this ticket." Leave both the PR and the ticket open, and go back to `main`: `git checkout main && git pull --ff-only`.
 
-If the merge is blocked (failing checks, conflicts, branch protection), leave the PR open, comment the reason on the ticket, and tell the user. Don't force it. Resolve conflicts by merging `main` into the branch (`git merge main`), not by rebasing a pushed branch.
+#### Waiting for PR approval (later ticks)
+
+For each open ticket with a `factory-loop:pr` comment, check its PR:
+
+```bash
+gh pr view <pr> --json state,reviewDecision,reviews,comments,mergedAt
+```
+
+- **Already merged by a person** (`state: MERGED`): post the done comment, make sure the ticket is closed, and you're done.
+- **Approved**: there is an `APPROVED` review, or the ticket author or a repo collaborator left a comment or review on the PR (or the ticket) starting with `approved`, `approve`, `lgtm` or `ship it`, posted after your latest push. GitHub won't let an account approve its own PR, so a comment is the usual signal when the loop runs on the requester's account. Then:
+  1. Merge with a merge commit, keeping the branch: `gh pr merge <pr> --merge`. Don't squash, so the SHAs in screenshot links stay valid, and don't pass `--delete-branch`, because deleting branches is off-limits.
+  2. `git checkout main && git pull --ff-only`.
+  3. Post the done comment and close the ticket (step 6).
+- **Changes requested, or review comments asking for changes:** check out the branch, make the changes, verify again (with new screenshots for UI changes), push to the same branch, reply on the PR with what changed, and keep waiting. Never treat feedback as approval.
+- **No review yet:** a quiet tick. Don't nag, merge or close.
+
+If the merge is blocked after approval (failing checks, conflicts, branch protection), comment the reason on the ticket and tell the user. Don't force it. Resolve conflicts by merging `main` into the branch (`git merge main`), not by rebasing a pushed branch, then ask for review again.
 
 **If the push fails** (auth, suspended account, network): keep the commit, don't open the PR, comment or close. Leave the ticket open with its reaction and tell the user. On every later tick, first retry the push; once it succeeds, carry on from step 7. The Stop hook (below) also retries the push.
 
@@ -155,7 +172,7 @@ _Source: <source>._
 
 **Work-request template:**
 ```markdown
-Done in PR #<pr> (<link to PR>), merged into `main` as <merge-sha-short>.
+Done in PR #<pr> (<link to PR>), approved by @<reviewer> and merged into `main` as <merge-sha-short>.
 
 **What changed**
 - <file>: <what and why>
@@ -175,7 +192,7 @@ Keep it short and factual. A reviewer should understand what was delivered witho
 
 ## 6. Close it
 
-Close only when the deliverable is visible on GitHub: the comment is posted, and for work requests the PR is merged. Merging normally closes the issue already; check, and close it yourself if it didn't:
+Close only when the deliverable is visible on GitHub: the comment is posted, and for work requests the PR has been **approved by a person and merged**. Never close a work-request ticket while its PR is still waiting for review. Merging normally closes the issue already (`Closes #<issue>`); check, and close it yourself if it didn't:
 
 ```bash
 gh issue close "$N" --repo "$REPO" --reason completed
@@ -189,7 +206,7 @@ GitHub's close reasons are only `completed` and `not planned`. "Answered" means 
 After the queue is processed, give the user one short block per ticket:
 
 ```
-#N  <title>  →  <answered | plan posted, awaiting approval | done in PR #12 (merged) | PR #12 open, merge blocked | needs clarification | refused | push blocked>  ·  <comment URL>
+#N  <title>  →  <answered | plan posted, awaiting approval | PR #12 awaiting review | changes pushed to PR #12 | done in PR #12 (approved, merged) | PR #12 approved, merge blocked | needs clarification | refused | push blocked>  ·  <comment URL>
 ```
 
 ## Dry-run mode
@@ -208,4 +225,4 @@ On each tick, run the full process. Keep quiet ticks quiet: if nothing new is op
 
 ## Auto commit and push on every stop
 
-`.claude/hooks/auto-commit-push.sh` runs as a Stop hook (see `.claude/settings.json`). Whenever Claude finishes a turn it commits any leftover changes and pushes the current branch, if that branch is `main` or a `ticket-*` branch. It never merges; merging is the loop's job. It's a safety net so finished work always reaches GitHub; it never force-pushes, never deletes, and skips the commit if anything that looks like a secret is staged. Still make your own per-ticket commits with proper messages: the hook only picks up what's left over.
+`.claude/hooks/auto-commit-push.sh` runs as a Stop hook (see `.claude/settings.json`). Whenever Claude finishes a turn it commits any leftover changes and pushes the current branch, if that branch is `main` or a `ticket-*` branch. It never merges; merging happens only after a person approves the PR. It's a safety net so finished work always reaches GitHub; it never force-pushes, never deletes, and skips the commit if anything that looks like a secret is staged. Still make your own per-ticket commits with proper messages: the hook only picks up what's left over.
