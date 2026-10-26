@@ -1,5 +1,7 @@
 // Todo app backed by IndexedDB (client-side database). No server, no build step.
-// Task shape: { id, title, done, createdAt, due: "YYYY-MM-DD" | null, tags: string[] }
+// Task shape: { id, title, done, createdAt, due: "YYYY-MM-DD" | null, tags: string[],
+//               repeat: { every: "day" | "week" | "month", interval: number, day?: number } | null,
+//               nextCreated?: true }  // set once the following occurrence of a recurring task exists
 const DB_NAME = "todo-app";
 const STORE = "tasks";
 const FILTER_KEY = "todo-app:filters";
@@ -28,19 +30,108 @@ const api = (db) => ({
   add: (task) => run(db, "readwrite", (s) => s.add({ done: false, createdAt: Date.now(), ...task })),
   update: (task) => run(db, "readwrite", (s) => s.put(task)),
   remove: (id) => run(db, "readwrite", (s) => s.delete(id)),
+  // Mark a recurring task done and add its next occurrence in one transaction: both happen or neither.
+  completeAndRepeat: (task, next) =>
+    new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      store.put(task);
+      store.add({ done: false, createdAt: Date.now(), ...next });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    }),
 });
 
-// Tasks saved before due dates and tags existed have neither field.
-const normalize = (t) => ({ ...t, due: t.due || null, tags: Array.isArray(t.tags) ? t.tags : [] });
+const validRepeat = (r) =>
+  r && ["day", "week", "month"].includes(r.every) && Number.isInteger(r.interval) && r.interval >= 1 ? r : null;
+
+// Tasks saved by earlier versions may lack due dates, tags or repeat rules.
+const normalize = (t) => ({
+  ...t,
+  due: t.due || null,
+  tags: Array.isArray(t.tags) ? t.tags : [],
+  repeat: validRepeat(t.repeat),
+});
 
 const parseTags = (text) =>
   [...new Set(text.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean))];
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Dates are plain "YYYY-MM-DD" strings in local time (toISOString would shift them across the UTC boundary).
+const toISO = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parseISO = (s) => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+const today = () => toISO(new Date());
 
 function formatDue(due) {
-  const [y, m, d] = due.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return parseISO(due).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+// One step of a repeat rule. Monthly keeps the anchor day and uses the last day of shorter months
+// (Jan 31 -> Feb 28/29 -> Mar 31), so the schedule doesn't drift.
+function addStep(dateStr, repeat) {
+  const d = parseISO(dateStr);
+  if (repeat.every === "month") {
+    const anchor = repeat.day || d.getDate();
+    const target = new Date(d.getFullYear(), d.getMonth() + repeat.interval, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(anchor, lastDay));
+    return toISO(target);
+  }
+  d.setDate(d.getDate() + (repeat.every === "week" ? 7 : 1) * repeat.interval);
+  return toISO(d);
+}
+
+// Next due date after completing a task: one step on from its due date, skipping ahead past any
+// dates already in the past so a late completion doesn't leave a backlog of overdue copies.
+function nextDue(task) {
+  const now = today();
+  let next = addStep(task.due || now, task.repeat);
+  while (next < now) next = addStep(next, task.repeat);
+  return next;
+}
+
+function repeatLabel(r) {
+  if (r.every === "day") return r.interval === 1 ? "Daily" : `Every ${r.interval} days`;
+  if (r.every === "week") return r.interval === 1 ? "Weekly" : `Every ${r.interval} weeks`;
+  return r.interval === 1 ? "Monthly" : `Every ${r.interval} months`;
+}
+
+// A recurring task needs a first due date (today if none was given); monthly rules remember its day.
+function withRepeat(task, repeat) {
+  if (!repeat) return { ...task, repeat: null };
+  const due = task.due || today();
+  return { ...task, due, repeat: repeat.every === "month" ? { ...repeat, day: parseISO(due).getDate() } : repeat };
+}
+
+// Repeat picker used by the add form and the inline editor: None / Daily / Weekly / Monthly / Every N days.
+function repeatControls(current, namePrefix) {
+  const select = el("select", { name: `${namePrefix}-repeat` });
+  select.setAttribute("aria-label", "Repeat");
+  for (const [value, text] of [["", "Doesn't repeat"], ["day", "Daily"], ["week", "Weekly"], ["month", "Monthly"], ["days", "Every N days"]]) {
+    select.append(el("option", { value, textContent: text }));
+  }
+  const days = el("input", { type: "number", name: `${namePrefix}-interval`, min: 2, max: 365, value: 2, className: "interval" });
+  days.setAttribute("aria-label", "Repeat every N days");
+
+  if (current) {
+    const custom = current.every === "day" && current.interval > 1;
+    select.value = custom ? "days" : current.every;
+    if (custom) days.value = current.interval;
+  }
+  const sync = () => { days.hidden = select.value !== "days"; };
+  select.addEventListener("change", sync);
+  sync();
+
+  const read = () => {
+    if (!select.value) return null;
+    if (select.value === "days") return { every: "day", interval: Math.max(2, Math.min(365, parseInt(days.value, 10) || 2)) };
+    return { every: select.value, interval: 1 };
+  };
+  const reset = () => { select.value = ""; days.value = 2; sync(); };
+  return { nodes: [select, days], read, reset };
 }
 
 // Filters are remembered per browser; storage can be unavailable (private mode), so fall back quietly.
@@ -78,6 +169,8 @@ async function main() {
   const tagsInput = document.getElementById("new-tags");
   const tagFilters = document.getElementById("tag-filters");
   const tagSep = document.getElementById("tag-sep");
+  const newRepeat = repeatControls(null, "new");
+  document.getElementById("new-repeat-slot").append(...newRepeat.nodes);
 
   const filter = loadFilter();
   let editingId = null;
@@ -132,12 +225,14 @@ async function main() {
     dueField.setAttribute("aria-label", "Due date");
     const tagsField = el("input", { type: "text", name: "edit-tags", value: task.tags.join(", "), placeholder: "Tags, comma separated" });
     tagsField.setAttribute("aria-label", "Tags");
+    const repeat = repeatControls(task.repeat, "edit");
 
     const save = async () => {
       const title = titleField.value.trim();
       if (!title) return titleField.focus();
       editingId = null;
-      await tasks.update({ ...task, title, due: dueField.value || null, tags: parseTags(tagsField.value) });
+      const edited = { ...task, title, due: dueField.value || null, tags: parseTags(tagsField.value) };
+      await tasks.update(withRepeat(edited, repeat.read()));
       render();
     };
     const cancel = () => {
@@ -156,7 +251,7 @@ async function main() {
     });
 
     li.append(
-      el("div", { className: "edit-fields" }, titleField, el("div", { className: "row" }, dueField, tagsField)),
+      el("div", { className: "edit-fields" }, titleField, el("div", { className: "row" }, dueField, tagsField, ...repeat.nodes)),
       el("div", { className: "actions" }, saveBtn, cancelBtn)
     );
     requestAnimationFrame(() => titleField.focus());
@@ -171,12 +266,18 @@ async function main() {
     const box = el("input", { type: "checkbox", name: `done-${task.id}`, checked: task.done });
     box.setAttribute("aria-label", `Mark "${task.title}" done`);
     box.addEventListener("change", async () => {
-      await tasks.update({ ...task, done: box.checked });
+      // Completing a recurring task creates its next occurrence once; unticking and re-ticking won't add another.
+      if (box.checked && task.repeat && !task.nextCreated) {
+        const next = { title: task.title, tags: task.tags, repeat: task.repeat, due: nextDue(task) };
+        await tasks.completeAndRepeat({ ...task, done: true, nextCreated: true }, next);
+      } else {
+        await tasks.update({ ...task, done: box.checked });
+      }
       render();
     });
 
     const body = el("div", { className: "body" }, el("div", { className: "title", textContent: task.title }));
-    if (task.due || task.tags.length) {
+    if (task.due || task.tags.length || task.repeat) {
       const meta = el("div", { className: "meta" });
       if (task.due) {
         const overdue = !task.done && task.due < today();
@@ -184,6 +285,11 @@ async function main() {
           className: "due" + (overdue ? " overdue" : ""),
           textContent: `Due ${formatDue(task.due)}${overdue ? " (overdue)" : ""}`,
         }));
+      }
+      if (task.repeat) {
+        const badge = el("span", { className: "repeat", textContent: `↻ ${repeatLabel(task.repeat)}` });
+        badge.title = "Recurring task: completing it creates the next one";
+        meta.append(badge);
       }
       for (const tag of task.tags) meta.append(el("span", { className: "tag", textContent: `#${tag}` }));
       body.append(meta);
@@ -231,9 +337,10 @@ async function main() {
     e.preventDefault();
     const title = titleInput.value.trim();
     if (!title) return;
-    const task = { title, due: dueInput.value || null, tags: parseTags(tagsInput.value) };
+    const task = withRepeat({ title, due: dueInput.value || null, tags: parseTags(tagsInput.value) }, newRepeat.read());
     // Reset before the async save, so a quick second entry typed meanwhile isn't wiped.
     form.reset();
+    newRepeat.reset();
     titleInput.focus();
     await tasks.add(task);
     render();
