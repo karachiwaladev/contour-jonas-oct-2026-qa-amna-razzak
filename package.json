@@ -4,7 +4,7 @@
   "description": "Software factory training repo: todo app plus factory-loop tooling",
   "scripts": {
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "node --test \"todo/tests/unit/*.test.js\"",
+    "test:unit": "node --test \"todo/tests/unit/*.test.js\" \"tests/*.test.js\"",
     "test:e2e": "playwright test",
     "security": "node scripts/security-check.js"
   },
