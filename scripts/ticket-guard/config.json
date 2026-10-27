@@ -1,0 +1,23 @@
+{
+  "repo": "karachiwaladev/contour-jonas-oct-2026-qa-amna-razzak",
+  "reviewers": ["Amna-razzak"],
+  "trustedAuthors": ["Amna-razzak", "mashhoodr"],
+  "quarantineLabel": "quarantine",
+  "clearedLabel": "security-cleared",
+  "screenTtlMinutes": 30,
+  "maxDenialsBeforeHalt": 2,
+  "denialWindowMinutes": 60,
+  "allowedLinks": [
+    "github.com/karachiwaladev/contour-jonas-oct-2026-qa-amna-razzak",
+    "github.com/user-attachments",
+    "user-images.githubusercontent.com",
+    "private-user-images.githubusercontent.com",
+    "docs.github.com",
+    "developer.mozilla.org",
+    "nodejs.org",
+    "playwright.dev",
+    "en.wikipedia.org",
+    "www.w3.org",
+    "html.spec.whatwg.org"
+  ]
+}

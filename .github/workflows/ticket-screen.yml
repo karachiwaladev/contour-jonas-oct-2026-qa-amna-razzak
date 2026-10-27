@@ -1,0 +1,37 @@
+name: Ticket screening
+
+# Server-side backstop for the factory loop: every new or edited issue and comment is screened by
+# scripts/screen-ticket.js on GitHub's runners, independent of any agent session. Findings quarantine the
+# ticket (label + reviewer alert). It never removes labels or closes anything.
+on:
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ticket-screen-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    name: screen
+    # Pull-request comments also fire issue_comment; only issues are tickets.
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Screen the ticket
+        # Untrusted text is never interpolated into the script: only the issue number, passed via env.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: node scripts/screen-ticket.js "$ISSUE_NUMBER" --ci

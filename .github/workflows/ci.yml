@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 jobs:
   test:
@@ -20,6 +22,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Quarantine gate (a PR must not close a quarantined ticket)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/screen-ticket.js --pr-gate "$PR_NUMBER"
       - name: Security check (secrets, unsafe DOM sinks, CSP)
         run: npm run security
       - name: Unit tests

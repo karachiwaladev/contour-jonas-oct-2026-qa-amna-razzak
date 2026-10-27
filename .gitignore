@@ -11,3 +11,6 @@
 node_modules/
 test-results/
 playwright-report/
+
+# Factory guard state (screening results, blocked actions, circuit breaker); local only
+.claude/state/
