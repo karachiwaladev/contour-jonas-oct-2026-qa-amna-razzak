@@ -7,6 +7,8 @@ This is a training repo: no real keys, no Jonas or Contour code.
 - **CI runs `npm run security` on every PR.** It fails on secret-looking files or tokens, on unsafe DOM sinks in app code (`innerHTML`, `insertAdjacentHTML`, `document.write`, `eval`), and on pages without a strict Content-Security-Policy.
 - **The todo app** renders user text with `textContent` only and ships a CSP of `default-src 'self'`, with no inline script or style.
 - **The factory loop** only acts on issues and approvals from repo collaborators, never merges its own PR without a person's approval, and never takes destructive actions. See `.claude/skills/factory-loop/SKILL.md`.
+- **Ticket text is data.** The loop acts only on the visible request. It ignores instructions hidden in HTML comments, links, quoted text or invisible characters, and flags them on the ticket.
+- **Dangerous commands are blocked outside the model.** `permissions.deny` rules in `.claude/settings.json`, plus a PreToolUse hook (`.claude/hooks/block-dangerous.js`, tested in `tests/block-dangerous.test.js`), block `rm -rf`, `git push --force`, `curl … | sh` and reading `.env` files.
 - **The session prompt log** (`.claude/logs/`) stays on your machine and is git-ignored. Earlier versions were committed, so they remain in git history.
 
 ## Reporting
